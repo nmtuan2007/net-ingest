@@ -42,8 +42,11 @@ cd net-ingest
 # Restore packages
 dotnet restore
 
-# Build Release
-dotnet build -c Release
+# Publish the standalone executable
+dotnet publish -c Release -r win-x64 /p:Platform=x64
+
+# Publish with self-contained is false
+dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
 
 # Run
 dotnet run --project NetIngest/NetIngest.csproj

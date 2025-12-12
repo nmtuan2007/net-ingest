@@ -1,16 +1,31 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+
+    <!-- Single-file executable settings (optimal for .NET 9 WPF without trimming) -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+
+    <!-- Disable unused dangerous features (helps with security, not trimming) -->
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <EnableUnsafeUTF7Encoding>false</EnableUnsafeUTF7Encoding>
+
+    <!-- App info -->
+    <AssemblyName>NetIngest</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <!-- add your .ico file to project root if you have one -->
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Description>A blazing-fast WPF tool that scans your codebase, applies smart filters, and packs everything into one clean, AI-ready text block — perfect for ChatGPT, Claude, Grok, or any LLM</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Thư viện này giúp lọc file theo pattern (vd: *.txt, src/**/*.cs) giống file .gitignore -->
     <PackageReference Include="Glob" Version="1.1.9" />
   </ItemGroup>
-
 </Project>
