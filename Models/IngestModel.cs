@@ -30,7 +30,7 @@ namespace NetIngest.Models
                 "*.pdb",
                 "*.png",
                 "*.jpg",
-                "*.zip", // ... (list rút gọn cho ngắn)
+                "*.zip",
             };
     }
 
@@ -60,6 +60,30 @@ namespace NetIngest.Models
         public string RelativePath { get; set; } = string.Empty;
         public bool IsDirectory { get; set; }
 
+        // --- MỚI: Lưu nội dung file thô tại đây ---
+        public string Content { get; set; } = string.Empty;
+
+        // --- MỚI: Checkbox state ---
+        private bool _isChecked = true;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set
+            {
+                if (SetProperty(ref _isChecked, value))
+                {
+                    // Nếu là thư mục, tự động check/uncheck tất cả con cái
+                    if (IsDirectory && Children != null)
+                    {
+                        foreach (var child in Children)
+                        {
+                            child.IsChecked = value;
+                        }
+                    }
+                }
+            }
+        }
+
         private long _tokenCount;
         public long TokenCount
         {
@@ -71,6 +95,9 @@ namespace NetIngest.Models
             }
         }
 
+        // --- MỚI: Đếm số lượng file (dùng cho thống kê thư mục) ---
+        public int FileCount { get; set; } = 0;
+
         public ObservableCollection<FileTreeNode> Children { get; set; } = new();
 
         public string Icon => IsDirectory ? "📁" : "📄";
@@ -78,16 +105,22 @@ namespace NetIngest.Models
             TokenCount > 1000 ? $"{TokenCount / 1000.0:F1}k tok" : $"{TokenCount} tok";
     }
 
-    // IngestResult giữ nguyên
     public class IngestResult
     {
         public bool IsSuccess { get; set; } = true;
         public string ErrorMessage { get; set; } = string.Empty;
+
+        // Các trường này sẽ được tính toán động (dynamic) sau này
         public string Summary { get; set; } = string.Empty;
         public string TreeStructureText { get; set; } = string.Empty;
         public string FileContents { get; set; } = string.Empty;
+
         public ObservableCollection<FileTreeNode> RootNodes { get; set; } = new();
         public int FileCount { get; set; }
         public long TotalTokensEstimated { get; set; }
     }
+
+    // File mới cho AppSettings đã tạo ở Giai đoạn 1 (giữ nguyên hoặc gộp vào đây nếu muốn)
+    // Nhưng vì file này là IngestModel.cs, ta để các class logic ở đây.
+    // Class AppSettings nằm ở file riêng AppSettings.cs là tốt nhất.
 }

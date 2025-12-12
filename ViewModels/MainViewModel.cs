@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using NetIngest.Core;
 using NetIngest.Models;
@@ -14,8 +16,11 @@ namespace NetIngest.ViewModels
     {
         private readonly IngestService _ingestService;
         private readonly PromptService _promptService;
+        private readonly SettingsService _settingsService;
+        private CancellationTokenSource? _cts;
+        private readonly DispatcherTimer _debounceTimer;
 
-        // --- Properties cho Binding ---
+        // --- Properties ---
         private string _sourcePath = "Select folder...";
         public string SourcePath
         {
@@ -63,7 +68,13 @@ namespace NetIngest.ViewModels
             get => _ignorePatterns;
             set => SetProperty(ref _ignorePatterns, value);
         }
-        public bool IncludeGitIgnored { get; set; } = true;
+
+        private bool _includeGitIgnored = true;
+        public bool IncludeGitIgnored
+        {
+            get => _includeGitIgnored;
+            set => SetProperty(ref _includeGitIgnored, value);
+        }
 
         private ObservableCollection<PromptTemplate> _templates;
         public ObservableCollection<PromptTemplate> Templates
@@ -86,7 +97,6 @@ namespace NetIngest.ViewModels
             }
         }
 
-        // Editing Template properties
         private string _editingTemplateName = "";
         public string EditingTemplateName
         {
@@ -101,7 +111,6 @@ namespace NetIngest.ViewModels
             set => SetProperty(ref _editingTemplateContent, value);
         }
 
-        // Result Data
         private IngestResult _lastResult = new();
         private ObservableCollection<FileTreeNode> _treeRoots = new();
         public ObservableCollection<FileTreeNode> TreeRoots
@@ -115,15 +124,24 @@ namespace NetIngest.ViewModels
         {
             get => _resultText;
             set => SetProperty(ref _resultText, value);
-        } // Dùng để hiển thị nội dung
+        }
 
-        // State
         private bool _isBusy;
         public bool IsBusy
         {
             get => _isBusy;
-            set => SetProperty(ref _isBusy, value);
+            set
+            {
+                if (SetProperty(ref _isBusy, value))
+                {
+                    OnPropertyChanged(nameof(AnalyzeButtonText));
+                    OnPropertyChanged(nameof(AnalyzeButtonColor));
+                }
+            }
         }
+
+        public string AnalyzeButtonText => IsBusy ? "STOP ANALYSIS" : "ANALYZE CODEBASE";
+        public string AnalyzeButtonColor => IsBusy ? "#EF4444" : "#10B981";
 
         private string _statusMsg = "Ready";
         public string StatusMsg
@@ -132,7 +150,35 @@ namespace NetIngest.ViewModels
             set => SetProperty(ref _statusMsg, value);
         }
 
-        // Stats
+        // Button Visual States
+        private string _copyViewBtnText = "Copy View";
+        public string CopyViewBtnText
+        {
+            get => _copyViewBtnText;
+            set => SetProperty(ref _copyViewBtnText, value);
+        }
+
+        private string _copyViewBtnColor = "#64748B";
+        public string CopyViewBtnColor
+        {
+            get => _copyViewBtnColor;
+            set => SetProperty(ref _copyViewBtnColor, value);
+        }
+
+        private string _copyTplBtnText = "COPY WITH TEMPLATE";
+        public string CopyTplBtnText
+        {
+            get => _copyTplBtnText;
+            set => SetProperty(ref _copyTplBtnText, value);
+        }
+
+        private string _copyTplBtnColor = "#F59E0B";
+        public string CopyTplBtnColor
+        {
+            get => _copyTplBtnColor;
+            set => SetProperty(ref _copyTplBtnColor, value);
+        }
+
         public string TokenCountDisplay =>
             _lastResult.TotalTokensEstimated > 1000000
                 ? $"{_lastResult.TotalTokensEstimated / 1000000.0:F1}M"
@@ -144,8 +190,7 @@ namespace NetIngest.ViewModels
 
         public int FileCountDisplay => _lastResult.FileCount;
 
-        // View Mode (Radio Buttons)
-        private string _viewMode = "Summary"; // Summary, Tree, Content
+        private string _viewMode = "Summary";
         public string ViewMode
         {
             get => _viewMode;
@@ -164,8 +209,6 @@ namespace NetIngest.ViewModels
         public ICommand SaveCommand { get; }
         public ICommand NewTemplateCommand { get; }
         public ICommand SaveTemplateCommand { get; }
-
-        // Context Menu Commands
         public ICommand AddIgnoreCommand { get; }
         public ICommand AddWhitelistCommand { get; }
         public ICommand CopyPathCommand { get; }
@@ -174,15 +217,25 @@ namespace NetIngest.ViewModels
         {
             _ingestService = new IngestService();
             _promptService = new PromptService();
+            _settingsService = new SettingsService();
+
             var tpls = _promptService.LoadTemplates();
             Templates = new ObservableCollection<PromptTemplate>(tpls);
             SelectedTemplate = Templates.FirstOrDefault();
 
-            // Init Commands
+            LoadSettings();
+
+            _debounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _debounceTimer.Tick += (s, e) =>
+            {
+                _debounceTimer.Stop();
+                RecalculateOutput();
+            };
+
             BrowseCommand = new RelayCommand(_ => BrowseFolder());
-            AnalyzeCommand = new RelayCommand(async _ => await AnalyzeAsync(), _ => !IsBusy);
-            CopyViewCommand = new RelayCommand(_ => CopyView());
-            CopyTemplateCommand = new RelayCommand(_ => CopyWithTemplate());
+            AnalyzeCommand = new RelayCommand(async _ => await OnAnalyzeClicked());
+            CopyViewCommand = new RelayCommand(async _ => await CopyViewAsync());
+            CopyTemplateCommand = new RelayCommand(async _ => await CopyWithTemplateAsync());
             SaveCommand = new RelayCommand(_ => SaveToFile());
 
             NewTemplateCommand = new RelayCommand(_ =>
@@ -216,6 +269,34 @@ namespace NetIngest.ViewModels
             });
         }
 
+        private void LoadSettings()
+        {
+            var settings = _settingsService.LoadSettings();
+            if (!string.IsNullOrEmpty(settings.LastSourcePath))
+                SourcePath = settings.LastSourcePath;
+            MaxSizeKb = settings.MaxFileSizeKb;
+            LimitFiles = settings.LimitFiles;
+            MaxFilesStr = settings.MaxFilesStr;
+            Whitelist = settings.Whitelist;
+            IgnorePatterns = settings.IgnorePatterns;
+            IncludeGitIgnored = settings.IncludeGitIgnored;
+        }
+
+        private void SaveSettings()
+        {
+            var settings = new AppSettings
+            {
+                LastSourcePath = SourcePath,
+                MaxFileSizeKb = MaxSizeKb,
+                LimitFiles = LimitFiles,
+                MaxFilesStr = MaxFilesStr,
+                Whitelist = Whitelist,
+                IgnorePatterns = IgnorePatterns,
+                IncludeGitIgnored = IncludeGitIgnored,
+            };
+            _settingsService.SaveSettings(settings);
+        }
+
         private void BrowseFolder()
         {
             var dialog = new OpenFolderDialog();
@@ -226,6 +307,17 @@ namespace NetIngest.ViewModels
             }
         }
 
+        private async Task OnAnalyzeClicked()
+        {
+            if (IsBusy)
+            {
+                _cts?.Cancel();
+                StatusMsg = "Cancelling...";
+                return;
+            }
+            await AnalyzeAsync();
+        }
+
         private async Task AnalyzeAsync()
         {
             if (string.IsNullOrWhiteSpace(SourcePath) || SourcePath == "Select folder...")
@@ -234,71 +326,178 @@ namespace NetIngest.ViewModels
                 return;
             }
 
+            SaveSettings();
             IsBusy = true;
             StatusMsg = "Initializing...";
+            _cts = new CancellationTokenSource();
 
-            int? maxFiles = LimitFiles && int.TryParse(MaxFilesStr, out int val) ? val : null;
-            long maxBytes = (long)(MaxSizeKb * 1024);
-
-            var options = new IngestOptions
+            try
             {
-                RootPath = SourcePath,
-                MaxFileSize = maxBytes,
-                IncludeGitIgnored = IncludeGitIgnored,
-                MaxFilesPerDirectory = maxFiles,
-            };
+                int? maxFiles = LimitFiles && int.TryParse(MaxFilesStr, out int val) ? val : null;
+                long maxBytes = (long)(MaxSizeKb * 1024);
 
-            AddPatternsToList(options.IgnorePatterns, IgnorePatterns);
-            AddPatternsToList(options.ForceFullIngestPatterns, Whitelist);
+                var options = new IngestOptions
+                {
+                    RootPath = SourcePath,
+                    MaxFileSize = maxBytes,
+                    IncludeGitIgnored = IncludeGitIgnored,
+                    MaxFilesPerDirectory = maxFiles,
+                };
 
-            var progress = new Progress<string>(msg => StatusMsg = msg);
+                AddPatternsToList(options.IgnorePatterns, IgnorePatterns);
+                AddPatternsToList(options.ForceFullIngestPatterns, Whitelist);
 
-            _lastResult = await _ingestService.IngestAsync(options, progress);
+                var progress = new Progress<string>(msg => StatusMsg = msg);
 
-            if (_lastResult.IsSuccess)
-            {
-                TreeRoots = _lastResult.RootNodes;
-                OnPropertyChanged(nameof(TokenCountDisplay));
-                OnPropertyChanged(nameof(FileCountDisplay));
-                UpdateResultView();
-                StatusMsg = "Analysis Complete!";
+                _lastResult = await _ingestService.IngestAsync(options, _cts.Token, progress);
+
+                if (_lastResult.IsSuccess)
+                {
+                    TreeRoots = _lastResult.RootNodes;
+                    SubscribeToNodeEvents(TreeRoots);
+                    RecalculateOutput();
+                    StatusMsg = "Analysis Complete!";
+                }
+                else
+                {
+                    StatusMsg = _lastResult.ErrorMessage;
+                }
             }
-            else
+            finally
             {
-                StatusMsg = "Error occurred.";
-                MessageBox.Show(_lastResult.ErrorMessage);
+                _cts?.Dispose();
+                _cts = null;
+                IsBusy = false;
+            }
+        }
+
+        private void RecalculateOutput()
+        {
+            if (_lastResult == null || TreeRoots == null)
+                return;
+
+            var sbTree = new StringBuilder();
+            var sbContent = new StringBuilder();
+
+            sbTree.AppendLine("Directory structure:");
+
+            int totalFiles = 0;
+            long totalTokens = 0;
+
+            void ProcessNodes(IEnumerable<FileTreeNode> nodes, string indent)
+            {
+                var nodeList = nodes.ToList();
+                for (int i = 0; i < nodeList.Count; i++)
+                {
+                    var node = nodeList[i];
+                    if (!node.IsChecked)
+                        continue;
+
+                    sbTree.AppendLine($"{indent}├── {node.Name}");
+
+                    if (node.IsDirectory)
+                    {
+                        ProcessNodes(node.Children, indent + "│   ");
+                    }
+                    else
+                    {
+                        totalFiles++;
+                        totalTokens += node.TokenCount;
+                        if (!string.IsNullOrEmpty(node.Content))
+                        {
+                            sbContent.AppendLine(
+                                "================================================"
+                            );
+                            sbContent.AppendLine($"FILE: {node.RelativePath}");
+                            sbContent.AppendLine(
+                                "================================================"
+                            );
+                            sbContent.AppendLine(node.Content);
+                            sbContent.AppendLine();
+                        }
+                    }
+                }
             }
 
-            IsBusy = false;
+            if (TreeRoots.Count > 0)
+            {
+                var root = TreeRoots[0];
+                sbTree.AppendLine($"└── {root.Name}");
+                ProcessNodes(root.Children, "    ");
+            }
+
+            _lastResult.FileCount = totalFiles;
+            _lastResult.TotalTokensEstimated = totalTokens;
+            _lastResult.TreeStructureText = sbTree.ToString();
+            _lastResult.FileContents = sbContent.ToString();
+            _lastResult.Summary = GenerateSummary(
+                new DirectoryInfo(SourcePath).Name,
+                totalFiles,
+                sbContent.Length,
+                totalTokens
+            );
+
+            OnPropertyChanged(nameof(TokenCountDisplay));
+            OnPropertyChanged(nameof(FileCountDisplay));
+            UpdateResultView();
+        }
+
+        private string GenerateSummary(string repoName, int files, long chars, long tokens) =>
+            $"Directory: {repoName}\nFiles selected: {files}\nTotal characters: {chars:N0}\nEstimated tokens: {tokens:N0}";
+
+        private void SubscribeToNodeEvents(IEnumerable<FileTreeNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                node.PropertyChanged += OnNodePropertyChanged;
+                if (node.Children.Count > 0)
+                    SubscribeToNodeEvents(node.Children);
+            }
+        }
+
+        private void OnNodePropertyChanged(
+            object? sender,
+            System.ComponentModel.PropertyChangedEventArgs e
+        )
+        {
+            if (e.PropertyName == nameof(FileTreeNode.IsChecked))
+            {
+                _debounceTimer.Stop();
+                _debounceTimer.Start();
+            }
         }
 
         private void UpdateResultView()
         {
-            if (ViewMode == "Tree")
-            {
-                // UI tự handle Visibility dựa trên binding
-            }
+            if (ViewMode == "Tree") { }
             else if (ViewMode == "Content")
-            {
                 ResultText = _lastResult.FileContents;
-            }
             else
-            {
                 ResultText = _lastResult.Summary;
-            }
         }
 
-        private void CopyView()
+        private async Task CopyViewAsync()
         {
             string content = ViewMode == "Tree" ? _lastResult.TreeStructureText : ResultText;
             if (!string.IsNullOrEmpty(content))
             {
                 Clipboard.SetText(content);
                 StatusMsg = "Copied to clipboard.";
+
+                string oldText = CopyViewBtnText;
+                string oldColor = CopyViewBtnColor;
+
+                CopyViewBtnText = "COPIED! ✅";
+                CopyViewBtnColor = "#10B981";
+
+                await Task.Delay(2000);
+
+                CopyViewBtnText = oldText;
+                CopyViewBtnColor = oldColor;
             }
         }
 
-        private void CopyWithTemplate()
+        private async Task CopyWithTemplateAsync()
         {
             if (_lastResult.FileCount == 0)
                 return;
@@ -311,6 +510,17 @@ namespace NetIngest.ViewModels
 
             Clipboard.SetText(final);
             StatusMsg = "Copied with template.";
+
+            string oldText = CopyTplBtnText;
+            string oldColor = CopyTplBtnColor;
+
+            CopyTplBtnText = "COPIED! ✅";
+            CopyTplBtnColor = "#10B981";
+
+            await Task.Delay(2000);
+
+            CopyTplBtnText = oldText;
+            CopyTplBtnColor = oldColor;
         }
 
         private void SaveToFile()
@@ -339,12 +549,9 @@ namespace NetIngest.ViewModels
         {
             if (string.IsNullOrWhiteSpace(EditingTemplateName))
                 return;
-
             var existing = Templates.FirstOrDefault(t => t.Name == EditingTemplateName);
             if (existing != null)
-            {
                 existing.Content = EditingTemplateContent;
-            }
             else
             {
                 var newTpl = new PromptTemplate
@@ -359,7 +566,6 @@ namespace NetIngest.ViewModels
             StatusMsg = $"Template '{EditingTemplateName}' saved.";
         }
 
-        // Helpers
         private void AddPatternsToList(List<string> list, string raw)
         {
             if (!string.IsNullOrWhiteSpace(raw))
@@ -380,6 +586,7 @@ namespace NetIngest.ViewModels
             {
                 field = string.IsNullOrEmpty(field) ? value : field + ", " + value;
                 OnPropertyChanged(propName);
+                SaveSettings();
             }
         }
     }

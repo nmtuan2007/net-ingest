@@ -8,16 +8,16 @@ namespace NetIngest.Services
 {
     public class IngestService
     {
-        private const string SeparatorLine = "================================================";
+        // Xóa biến const SeparatorLine ở đây vì việc format text sẽ chuyển về ViewModel/Helper
 
         public async Task<IngestResult> IngestAsync(
             IngestOptions options,
+            CancellationToken token,
             IProgress<string>? progress = null
         )
         {
             var result = new IngestResult();
-            var sbTreeText = new StringBuilder();
-            var sbContent = new StringBuilder();
+            // Không cần StringBuilder content ở đây nữa
 
             try
             {
@@ -37,33 +37,35 @@ namespace NetIngest.Services
 
                 progress?.Report("Scanning directory structure...");
 
-                // Chạy trên Background thread thực sự
-                await Task.Run(async () =>
-                {
-                    long totalTokens = await ProcessDirectoryAsync(
-                        rootDirInfo,
-                        rootNode,
-                        "",
-                        true,
-                        options,
-                        sbTreeText,
-                        sbContent,
-                        result,
-                        progress
-                    );
+                await Task.Run(
+                    async () =>
+                    {
+                        // Hàm đệ quy giờ đây chỉ tập trung xây dựng Tree và điền dữ liệu vào Node
+                        await ProcessDirectoryAsync(
+                            rootDirInfo,
+                            rootNode,
+                            options,
+                            result,
+                            progress,
+                            token
+                        );
 
-                    sbTreeText.Insert(0, "Directory structure:\n");
-                    result.TreeStructureText = sbTreeText.ToString();
-                    result.FileContents = sbContent.ToString();
-                    result.RootNodes = new ObservableCollection<FileTreeNode> { rootNode };
-                    result.TotalTokensEstimated = totalTokens;
-                    result.Summary = GenerateSummary(
-                        rootDirInfo.Name,
-                        result.FileCount,
-                        result.FileContents.Length,
-                        totalTokens
-                    );
-                });
+                        result.RootNodes = new ObservableCollection<FileTreeNode> { rootNode };
+
+                        // Các thông số tổng hợp ban đầu (khi tất cả đều Checked)
+                        result.FileCount = rootNode.FileCount;
+                        result.TotalTokensEstimated = rootNode.TokenCount;
+
+                        // Lưu ý: Summary và FileContents string sẽ được tạo bởi ViewModel sau này
+                        result.IsSuccess = true;
+                    },
+                    token
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                result.IsSuccess = false;
+                result.ErrorMessage = "Operation cancelled by user.";
             }
             catch (Exception ex)
             {
@@ -74,27 +76,24 @@ namespace NetIngest.Services
             return result;
         }
 
-        private async Task<long> ProcessDirectoryAsync(
+        private async Task ProcessDirectoryAsync(
             DirectoryInfo currentDir,
             FileTreeNode currentNode,
-            string indent,
-            bool isLast,
             IngestOptions options,
-            StringBuilder sbTreeText,
-            StringBuilder sbContent,
             IngestResult result,
-            IProgress<string>? progress
+            IProgress<string>? progress,
+            CancellationToken token
         )
         {
+            token.ThrowIfCancellationRequested();
+
             long currentDirTokens = 0;
-            sbTreeText.AppendLine($"{indent}{(isLast ? "└── " : "├── ")}{currentDir.Name}/");
-            string childIndent = indent + (isLast ? "    " : "│   ");
+            int currentDirFileCount = 0;
 
             try
             {
                 var allItems = currentDir.GetFileSystemInfos();
 
-                // Filter items
                 var filteredItems = allItems
                     .Where(item => !ShouldIgnore(item, options.RootPath, options.IgnorePatterns))
                     .OrderBy(item => item.Name)
@@ -124,10 +123,12 @@ namespace NetIngest.Services
                     .OrderBy(i => i.Name)
                     .ToList();
 
-                for (int i = 0; i < itemsToProcess.Count; i++)
+                // Dùng List tạm để tránh add từng item vào ObservableCollection gây chậm UI (dù đang ở background nhưng chuẩn bị cho tương lai)
+                var childNodes = new List<FileTreeNode>();
+
+                foreach (var item in itemsToProcess)
                 {
-                    var item = itemsToProcess[i];
-                    bool isItemLast = (i == itemsToProcess.Count - 1);
+                    token.ThrowIfCancellationRequested();
 
                     var childNode = new FileTreeNode
                     {
@@ -136,94 +137,89 @@ namespace NetIngest.Services
                         RelativePath = Path.GetRelativePath(options.RootPath, item.FullName)
                             .Replace("\\", "/"),
                         IsDirectory = (item is DirectoryInfo),
+                        IsChecked = true, // Mặc định chọn
                     };
-
-                    // UI Update cần thread safe (thêm vào collection sau khi xử lý xong hoặc dispatch về UI -
-                    // Ở đây ta add vào Children trước vì ObservableCollection này chưa gắn vào UI lúc đang chạy background)
-                    currentNode.Children.Add(childNode);
 
                     if (item is DirectoryInfo subDir)
                     {
                         childNode.Name += "/";
-                        long subTokens = await ProcessDirectoryAsync(
+                        await ProcessDirectoryAsync(
                             subDir,
                             childNode,
-                            childIndent,
-                            isItemLast,
                             options,
-                            sbTreeText,
-                            sbContent,
                             result,
-                            progress
+                            progress,
+                            token
                         );
-                        childNode.TokenCount = subTokens;
-                        currentDirTokens += subTokens;
+                        // Cộng dồn token từ con lên cha
+                        currentDirTokens += childNode.TokenCount;
+                        currentDirFileCount += childNode.FileCount;
                     }
                     else if (item is FileInfo file)
                     {
-                        long fileTokens = await ProcessFileAsync(
-                            file,
-                            childNode,
-                            childIndent,
-                            isItemLast,
-                            options,
-                            sbTreeText,
-                            sbContent,
-                            result
-                        );
-                        childNode.TokenCount = fileTokens;
+                        long fileTokens = await ProcessFileAsync(file, childNode, options, token);
+                        // Chỉ đếm nếu file hợp lệ (có nội dung hoặc token > 0, hoặc tùy logic)
+                        // Ở đây ta đếm tất cả file được add vào tree
                         currentDirTokens += fileTokens;
+                        currentDirFileCount++;
 
-                        if (result.FileCount % 10 == 0) // Report mỗi 10 file để đỡ lag UI
-                            progress?.Report($"Processed {result.FileCount} files...");
+                        // Report tiến độ dựa trên số file toàn cục (đếm sơ bộ)
+                        // Vì ta không còn biến result.FileCount toàn cục chính xác ngay lúc chạy
+                        // nên có thể dùng biến tạm hoặc bỏ qua report chi tiết số lượng.
+                        // Để đơn giản, ta report tên file đang xử lý
+                        // progress?.Report($"Processing: {file.Name}...");
                     }
+
+                    childNodes.Add(childNode);
                 }
+
+                // Add một lần vào Children của node cha
+                foreach (var node in childNodes)
+                    currentNode.Children.Add(node);
             }
             catch (UnauthorizedAccessException) { }
 
             currentNode.TokenCount = currentDirTokens;
-            return currentDirTokens;
+            currentNode.FileCount = currentDirFileCount;
         }
 
         private async Task<long> ProcessFileAsync(
             FileInfo file,
             FileTreeNode node,
-            string indent,
-            bool isLast,
             IngestOptions options,
-            StringBuilder sbTreeText,
-            StringBuilder sbContent,
-            IngestResult result
+            CancellationToken token
         )
         {
-            sbTreeText.AppendLine($"{indent}{(isLast ? "└── " : "├── ")}{file.Name}");
             long tokenCount = 0;
 
             if (file.Length <= options.MaxFileSize && !IsBinaryFile(file.FullName))
             {
                 try
                 {
-                    // Dùng ReadAllTextAsync để không block thread
-                    string content = await File.ReadAllTextAsync(file.FullName);
+                    string content = await File.ReadAllTextAsync(file.FullName, token);
 
-                    sbContent.AppendLine(SeparatorLine);
-                    sbContent.AppendLine($"FILE: {node.RelativePath}");
-                    sbContent.AppendLine(SeparatorLine);
-                    sbContent.AppendLine(content);
-                    sbContent.AppendLine();
+                    // LƯU Ý: Lưu nội dung vào Node
+                    node.Content = content;
 
-                    result.FileCount++;
                     tokenCount = content.Length / 4;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch { }
             }
+            // Gán token cho node
+            node.TokenCount = tokenCount;
+            // FileCount của node lá luôn là 1 (hoặc 0 nếu lỗi, nhưng cứ để 1 cho file hiện hữu)
+            node.FileCount = 1;
+
             return tokenCount;
         }
 
-        // --- Các hàm Helper giữ nguyên logic ---
+        // --- Các hàm Helper (ShouldIgnore, ShouldForceInclude, IsBinaryFile) GIỮ NGUYÊN ---
         private bool ShouldIgnore(FileSystemInfo item, string rootPath, List<string> patterns)
         {
-            // Logic giữ nguyên như bản cũ
             string relativePath = Path.GetRelativePath(rootPath, item.FullName).Replace("\\", "/");
             string relativePathWithSlash = relativePath + (item is DirectoryInfo ? "/" : "");
 
@@ -251,7 +247,6 @@ namespace NetIngest.Services
 
         private bool ShouldForceInclude(DirectoryInfo dir, string rootPath, List<string> patterns)
         {
-            // Logic giữ nguyên như bản cũ
             if (patterns == null || patterns.Count == 0)
                 return false;
             string relativePath = Path.GetRelativePath(rootPath, dir.FullName).Replace("\\", "/");
@@ -270,7 +265,6 @@ namespace NetIngest.Services
 
         private bool IsBinaryFile(string filePath)
         {
-            // Logic giữ nguyên như bản cũ
             try
             {
                 using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
@@ -284,8 +278,5 @@ namespace NetIngest.Services
                 return true;
             }
         }
-
-        private string GenerateSummary(string repoName, int files, long chars, long tokens) =>
-            $"Directory: {repoName}\nFiles analyzed: {files}\nTotal characters: {chars:N0}\nEstimated tokens: {tokens:N0}";
     }
 }

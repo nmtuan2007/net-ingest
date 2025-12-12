@@ -1,0 +1,15 @@
+{
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/.git": true,
+    "**/.vs": true
+  },
+  "files.encoding": "utf8",
+  "editor.formatOnSave": true,
+  "[csharp]": {
+    "editor.defaultFormatter": "csharpier.csharpier-vscode"
+  },
+  "csharpier.enable": true,
+  "dotnet.defaultSolution": "NetIngest.csproj"
+}

@@ -8,7 +8,7 @@
   xmlns:models="clr-namespace:NetIngest.Models"
   xmlns:core="clr-namespace:NetIngest.Core"
   mc:Ignorable="d"
-  Title="NetIngest v1.0"
+  Title="NetIngest v1.3"
   Height="800"
   Width="1280"
   WindowState="Maximized"
@@ -23,7 +23,6 @@
     <core:StringMatchToBooleanConverter x:Key="StringMatchConverter" />
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-    <!-- Style Button & Label như cũ, tôi lược bớt để tập trung vào logic -->
     <Style TargetType="Button">
       <Setter Property="Padding" Value="12,8" />
       <Setter Property="Background" Value="#3B82F6" />
@@ -40,7 +39,7 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#2563EB" />
+                <Setter Property="Opacity" Value="0.9" />
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Background" Value="#94A3B8" />
@@ -61,6 +60,8 @@
         Margin="0,2"
         Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
       >
+        <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" Margin="0,0,6,0" />
+
         <TextBlock Text="{Binding Icon}" Margin="0,0,5,0" FontSize="14" />
         <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" />
         <TextBlock
@@ -320,11 +321,11 @@
           </Border>
 
           <Button
-            Content="ANALYZE CODEBASE"
+            Content="{Binding AnalyzeButtonText}"
+            Background="{Binding AnalyzeButtonColor}"
             Height="50"
             FontSize="15"
             FontWeight="Bold"
-            Background="#10B981"
             Command="{Binding AnalyzeCommand}"
           />
           <TextBlock
@@ -379,7 +380,7 @@
 
       <!-- Content Area -->
       <Grid Grid.Row="1">
-        <!-- 1. TEXTBOX HIỂN THỊ KẾT QUẢ (Summary hoặc Content) -->
+        <!-- 1. TEXTBOX -->
         <TextBox
           Text="{Binding ResultText}"
           FontFamily="Consolas"
@@ -393,9 +394,7 @@
           <TextBox.Style>
             <Style TargetType="TextBox">
               <Setter Property="Visibility" Value="Visible" />
-              <!-- Mặc định hiện -->
               <Style.Triggers>
-                <!-- Nếu ViewMode là Tree thì ẨN TextBox đi -->
                 <DataTrigger Binding="{Binding ViewMode}" Value="Tree">
                   <Setter Property="Visibility" Value="Hidden" />
                 </DataTrigger>
@@ -415,9 +414,7 @@
           <TreeView.Style>
             <Style TargetType="TreeView">
               <Setter Property="Visibility" Value="Hidden" />
-              <!-- Mặc định ẩn -->
               <Style.Triggers>
-                <!-- Nếu ViewMode là Tree thì HIỆN TreeView lên -->
                 <DataTrigger Binding="{Binding ViewMode}" Value="Tree">
                   <Setter Property="Visibility" Value="Visible" />
                 </DataTrigger>
@@ -436,14 +433,22 @@
           Background="#88FFFFFF"
           Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
         >
-          <TextBlock
-            Text="Processing..."
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            FontSize="20"
-            FontWeight="Bold"
-            Foreground="#3B82F6"
-          />
+          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock
+              Text="Processing..."
+              HorizontalAlignment="Center"
+              FontSize="20"
+              FontWeight="Bold"
+              Foreground="#3B82F6"
+            />
+            <TextBlock
+              Text="(Click STOP to cancel)"
+              HorizontalAlignment="Center"
+              FontSize="12"
+              Foreground="#64748B"
+              Margin="0,5,0,0"
+            />
+          </StackPanel>
         </Grid>
       </Grid>
 
@@ -455,14 +460,14 @@
         Margin="0,15,0,0"
       >
         <Button
-          Content="Copy View"
-          Background="#64748B"
+          Content="{Binding CopyViewBtnText}"
+          Background="{Binding CopyViewBtnColor}"
           Margin="0,0,10,0"
           Command="{Binding CopyViewCommand}"
         />
         <Button
-          Content="COPY WITH TEMPLATE"
-          Background="#F59E0B"
+          Content="{Binding CopyTplBtnText}"
+          Background="{Binding CopyTplBtnColor}"
           Command="{Binding CopyTemplateCommand}"
         />
         <Button

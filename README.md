@@ -1,164 +1,112 @@
-NetIngest 🚀
+# NetIngest
 
-NetIngest is a powerful Windows Presentation Foundation (WPF) application designed to ingest, analyze, and consolidate local codebases into a single, optimized text format. It is specifically built to help developers prepare code context for Large Language Models (LLMs) like ChatGPT, Claude, or DeepSeek.
+Inspired by the clever simplicity of [GitIngest](https://github.com/coderamp-labs/gitingest) – which transforms any GitHub repo into an LLM-ready prompt by swapping "hub" for "ingest" in the URL – **NetIngest** brings that magic to your local machine. This WPF powerhouse scans, filters, and consolidates your entire codebase into a single, optimized text block, tailored for seamless feeding into ChatGPT, Claude, Grok, or any AI coding wizard.
 
-![alt text](https://img.shields.io/badge/license-MIT-blue.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)](https://www.microsoft.com/windows)
+[![.NET 9.0](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/9.0)
 
+## Overview
 
-![alt text](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+Manually copying and pasting dozens of files into an LLM chat is painful and error-prone.  
+**NetIngest** fully automates this process:
 
+- Recursively scans your project folder
+- Automatically skips binaries, build artifacts, and large files
+- Shows an interactive file tree with per-file token estimates
+- Generates a single clean text block (or file) ready to paste into any AI coding assistant
 
-![alt text](https://img.shields.io/badge/.NET-9.0-purple.svg)
+## Features
 
-📖 Overview
+| Feature                  | Description                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| Smart Directory Scanning | Full recursive traversal with progress feedback                                               |
+| Intelligent Filtering    | Respects `.gitignore`<br>Custom glob ignore patterns<br>Whitelist (force-include) support     |
+| Performance Optimized    | Async file processing<br>Configurable max file size<br>Sampling mode (limit files per folder) |
+| Interactive Tree View    | Visual folder structure<br>Real-time token count per file<br>Right-click to ignore/whitelist  |
+| AI-Ready Output          | Token estimation (chars ÷ 4)<br>Built-in + custom prompt templates<br>3 view modes            |
+| Flexible Export          | Copy current view<br>Copy with selected template<br>Save to `.txt`                            |
 
-When working with AI coding assistants, pasting multiple files manually is tedious. NetIngest automates this by recursively scanning your project directory, filtering out binary or irrelevant files, visualizing the structure, and generating a single prompt-ready text block containing both the directory tree and file contents.
+## Requirements
 
-✨ Key Features
+- OS: **Windows 10 / 11**
+- Runtime: **.NET 9.0 Desktop Runtime**
+- To build from source: **.NET 9.0 SDK**
 
-📁 Smart Directory Scanning: Recursively traverses project folders.
+## Installation & Quick Start
 
-🚫 Intelligent Filtering:
-
-Respects .gitignore files automatically.
-
-Supports custom Ignore Patterns (Glob syntax, e.g., docs/, *.svg).
-
-Whitelist (Force Include) specific critical files even if limits are applied.
-
-⚡ Performance Optimized:
-
-Asynchronous file processing.
-
-Configurable Max File Size limits to avoid bloating.
-
-Option to limit the number of files processed per directory (Sampling mode).
-
-🌳 Tree View Visualization:
-
-Interactive file tree showing individual file token counts.
-
-Context menu to quickly add files to Ignore/Whitelist or copy paths.
-
-🤖 AI-Ready Output:
-
-Token Estimation: Real-time estimation of token usage (approx. chars / 4).
-
-Prompt Templates: Built-in and custom templates (e.g., "Explain Code", "Refactor Request") to wrap your codebase automatically.
-
-📋 multiple View Modes: Summary, Tree Structure, and Full Content.
-
-🛠 Prerequisites
-
-OS: Windows 10/11 (WPF Application).
-
-Runtime: .NET 9.0 Desktop Runtime.
-
-Build: .NET 9.0 SDK (if compiling from source).
-
-🚀 Getting Started
-Installation
-
-Clone the repository:
-
-code
-Bash
-download
-content_copy
-expand_less
-git clone https://github.com/yourusername/net-ingest.git
+```bash
+git clone https://github.com/nmtuan2007/net-ingest.git
 cd net-ingest
 
-Build the project:
-
-code
-Bash
-download
-content_copy
-expand_less
+# Restore packages
 dotnet restore
+
+# Build Release
 dotnet build -c Release
 
-Run the application:
-Navigate to bin/Release/net9.0-windows/ and run NetIngest.exe, or run via CLI:
+# Run
+dotnet run --project NetIngest/NetIngest.csproj
+```
 
-code
-Bash
-download
-content_copy
-expand_less
-dotnet run --project NetIngest.csproj
-📖 Usage Guide
+Or simply run the generated `NetIngest.exe` from  
+`bin/Release/net9.0-windows/`
 
-Select Source: Click the ... button to choose the root folder of the project you want to analyze.
+## Usage
 
-Configure Filters (Sidebar):
+1. Click `...` → select your project root folder
+2. (Optional) Adjust filters on the left sidebar:
+   - Max file size slider
+   - Limit files per directory (sampling)
+   - Add custom ignore patterns
+3. Click the big green **ANALYZE CODEBASE** button
+4. Explore results in three tabs:
+   - **Summary** – stats overview
+   - **Tree View** – interactive structure + token counts
+   - **Full Content** – complete consolidated text
+5. Export:
+   - **Copy View** → current tab
+   - **Copy with Template** → wrapped in your chosen prompt
+   - **Save** → export to `.txt`
 
-Adjust Max File Size slider (default: 100KB).
+## Configuration
 
-Check Limit files per directory if you only want a sample structure (e.g., top 2 files per folder).
+### Ignore Patterns & Whitelist
 
-Edit Ignore Patterns to exclude folders like node_modules, bin, or obj.
+Uses standard Glob syntax:
 
-Analyze: Click the big green ANALYZE CODEBASE button.
+```
+*.png
+node_modules/
+bin/
+obj/
+logs/**
+```
 
-Review Results:
+### Prompt Templates
 
-Summary: General stats (File count, Total tokens).
+Stored in `templates.json` (same folder as the exe).  
+Editable directly in the **Templates** tab.
 
-Tree View: Visual structure. Right-click nodes to ignore/whitelist.
+Only one placeholder is supported: `{SOURCE_CODE}` → replaced with the full processed codebase.
 
-Full Content: The raw consolidated text.
+## Contributing
 
-Export:
+Contributions are very welcome!
 
-Copy View: Copies the currently visible tab content.
+1. Fork the repo
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-Copy with Template: Wraps the entire codebase in your selected Prompt Template and copies to clipboard.
+## License
 
-Save...: Exports the result to a .txt file.
+Distributed under the **MIT License**. See `LICENSE` for details.
 
-⚙️ Configuration
-Ignore Patterns & Whitelist
+## Acknowledgments
 
-NetIngest uses Glob patterns.
+- Built with love in **C# / WPF**
+- Uses [Glob](https://github.com/kthomas/Glob) for pattern matching
 
-*.png - Ignores all PNG files.
-
-test/ - Ignores the test directory.
-
-src/**/*.cs - Matches C# files in src.
-
-Prompt Templates
-
-Templates are stored in templates.json in the application directory. You can create new ones via the UI (Templates Tab).
-Format placeholders:
-
-{SOURCE_CODE}: Will be replaced by the Summary + Directory Tree + File Contents.
-
-🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-Fork the project.
-
-Create your feature branch (git checkout -b feature/AmazingFeature).
-
-Commit your changes (git commit -m 'Add some AmazingFeature').
-
-Push to the branch (git push origin feature/AmazingFeature).
-
-Open a Pull Request.
-
-📄 License
-
-Distributed under the MIT License. See LICENSE for more information.
-
-🙏 Acknowledgments
-
-Built with ❤️ in C# / WPF.
-
-Uses Glob for file pattern matching.
-
-Author: Tuan Nguyen
-Repository: github.com/yourusername/net-ingest
+**Author**: Tuan Nguyen – [@nmtuan2007](https://github.com/nmtuan2007)

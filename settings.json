@@ -1,0 +1,9 @@
+{
+  "LastSourcePath": "C:\\Working\\SourceCode\\VNPT.CameraAi.PhuongXa\\Source\\VNPT.CameraAi.PhuongXa.API\\VNPT.CameraAi.PhuongXa.Api",
+  "MaxFileSizeKb": 100,
+  "LimitFiles": true,
+  "MaxFilesStr": "3",
+  "Whitelist": "Models, DTOs",
+  "IgnorePatterns": "docs/, *.svg, test/, Temp",
+  "IncludeGitIgnored": true
+}
