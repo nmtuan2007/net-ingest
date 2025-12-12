@@ -1,0 +1,14 @@
+[
+  {
+    "Name": "Raw Code",
+    "Content": "{SOURCE_CODE}"
+  },
+  {
+    "Name": "Explain Code",
+    "Content": "Here is the source code of a project:\n\n\u0060\u0060\u0060\r\n\r\n{SOURCE_CODE}\r\n\n\u0060\u0060\u0060\r\n\nPlease explain the architecture and key flows of this application."
+  },
+  {
+    "Name": "Refactor Request",
+    "Content": "I need to refactor the following code:\n\r\n\u0060\u0060\u0060\r\n\n{SOURCE_CODE}\r\n\n\u0060\u0060\u0060\r\n\nPlease identify code smells and suggest improvements."
+  }
+]
