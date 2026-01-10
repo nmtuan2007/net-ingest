@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Text;
 using GlobExpressions;
 using NetIngest.Models;
 
@@ -8,8 +7,6 @@ namespace NetIngest.Services
 {
     public class IngestService
     {
-        // Xóa biến const SeparatorLine ở đây vì việc format text sẽ chuyển về ViewModel/Helper
-
         public async Task<IngestResult> IngestAsync(
             IngestOptions options,
             CancellationToken token,
@@ -17,7 +14,6 @@ namespace NetIngest.Services
         )
         {
             var result = new IngestResult();
-            // Không cần StringBuilder content ở đây nữa
 
             try
             {
@@ -40,7 +36,6 @@ namespace NetIngest.Services
                 await Task.Run(
                     async () =>
                     {
-                        // Hàm đệ quy giờ đây chỉ tập trung xây dựng Tree và điền dữ liệu vào Node
                         await ProcessDirectoryAsync(
                             rootDirInfo,
                             rootNode,
@@ -52,11 +47,10 @@ namespace NetIngest.Services
 
                         result.RootNodes = new ObservableCollection<FileTreeNode> { rootNode };
 
-                        // Các thông số tổng hợp ban đầu (khi tất cả đều Checked)
+                        // Initial stats
                         result.FileCount = rootNode.FileCount;
                         result.TotalTokensEstimated = rootNode.TokenCount;
 
-                        // Lưu ý: Summary và FileContents string sẽ được tạo bởi ViewModel sau này
                         result.IsSuccess = true;
                     },
                     token
@@ -93,18 +87,51 @@ namespace NetIngest.Services
             try
             {
                 var allItems = currentDir.GetFileSystemInfos();
+                
+                // Separate Dirs and Files to apply different filtering logic
+                var rawDirs = allItems.OfType<DirectoryInfo>();
+                var rawFiles = allItems.OfType<FileInfo>();
 
-                var filteredItems = allItems
-                    .Where(item => !ShouldIgnore(item, options.RootPath, options.IgnorePatterns))
-                    .OrderBy(item => item.Name)
+                // 1. Filter Directories
+                // We always respect IgnorePatterns for directories to avoid traversing junk (like .git, node_modules)
+                // UNLESS the directory is explicitly whitelisted.
+                var directories = rawDirs
+                    .Where(d => 
+                        ShouldForceInclude(d, options.RootPath, options.ForceFullIngestPatterns) ||
+                        !ShouldIgnore(d, options.RootPath, options.IgnorePatterns))
+                    .OrderBy(d => d.Name)
                     .ToList();
 
-                var directories = filteredItems.OfType<DirectoryInfo>().ToList();
-                var files = filteredItems.OfType<FileInfo>().ToList();
+                // 2. Filter Files
+                List<FileInfo> files;
+                
+                // CHECK: Is Target Mode active?
+                if (options.TargetFilePatterns != null && options.TargetFilePatterns.Any())
+                {
+                    // PRIORITY MODE: Only include files matching Target Patterns.
+                    // effectively ignoring "IgnorePatterns" for files.
+                    files = rawFiles
+                        .Where(f => MatchesPatternList(f, options.RootPath, options.TargetFilePatterns))
+                        .OrderBy(f => f.Name)
+                        .ToList();
+                }
+                else
+                {
+                    // NORMAL MODE: Exclude files matching IgnorePatterns
+                    files = rawFiles
+                        .Where(f => !ShouldIgnore(f, options.RootPath, options.IgnorePatterns))
+                        .OrderBy(f => f.Name)
+                        .ToList();
+                }
 
-                // Apply Limits
+                // 3. Apply Max Files Limit (Sampling)
+                // (Note: Typically sampling applies to the final valid list of files in a folder)
                 if (options.MaxFilesPerDirectory.HasValue && options.MaxFilesPerDirectory > 0)
                 {
+                    // If whitelist overrides limit, check it. 
+                    // Note: Target Files mode usually implies we want ALL found target files, 
+                    // but to stay consistent with UI ("Limit files per directory" checkbox), 
+                    // we apply the limit if the user checked it.
                     if (
                         !ShouldForceInclude(
                             currentDir,
@@ -117,13 +144,13 @@ namespace NetIngest.Services
                     }
                 }
 
+                // Combine for processing order
                 var itemsToProcess = directories
                     .Cast<FileSystemInfo>()
                     .Concat(files)
                     .OrderBy(i => i.Name)
                     .ToList();
 
-                // Dùng List tạm để tránh add từng item vào ObservableCollection gây chậm UI (dù đang ở background nhưng chuẩn bị cho tương lai)
                 var childNodes = new List<FileTreeNode>();
 
                 foreach (var item in itemsToProcess)
@@ -137,7 +164,7 @@ namespace NetIngest.Services
                         RelativePath = Path.GetRelativePath(options.RootPath, item.FullName)
                             .Replace("\\", "/"),
                         IsDirectory = (item is DirectoryInfo),
-                        IsChecked = true, // Mặc định chọn
+                        IsChecked = true,
                     };
 
                     if (item is DirectoryInfo subDir)
@@ -151,29 +178,20 @@ namespace NetIngest.Services
                             progress,
                             token
                         );
-                        // Cộng dồn token từ con lên cha
+                        // Sum up stats
                         currentDirTokens += childNode.TokenCount;
                         currentDirFileCount += childNode.FileCount;
                     }
                     else if (item is FileInfo file)
                     {
                         long fileTokens = await ProcessFileAsync(file, childNode, options, token);
-                        // Chỉ đếm nếu file hợp lệ (có nội dung hoặc token > 0, hoặc tùy logic)
-                        // Ở đây ta đếm tất cả file được add vào tree
                         currentDirTokens += fileTokens;
                         currentDirFileCount++;
-
-                        // Report tiến độ dựa trên số file toàn cục (đếm sơ bộ)
-                        // Vì ta không còn biến result.FileCount toàn cục chính xác ngay lúc chạy
-                        // nên có thể dùng biến tạm hoặc bỏ qua report chi tiết số lượng.
-                        // Để đơn giản, ta report tên file đang xử lý
-                        // progress?.Report($"Processing: {file.Name}...");
                     }
 
                     childNodes.Add(childNode);
                 }
 
-                // Add một lần vào Children của node cha
                 foreach (var node in childNodes)
                     currentNode.Children.Add(node);
             }
@@ -192,15 +210,15 @@ namespace NetIngest.Services
         {
             long tokenCount = 0;
 
+            // In Target Mode, we might still want to respect MaxFileSize for performance,
+            // but let's assume if user targets a file, they want it. 
+            // However, sticking to global MaxFileSize is safer for the app.
             if (file.Length <= options.MaxFileSize && !IsBinaryFile(file.FullName))
             {
                 try
                 {
                     string content = await File.ReadAllTextAsync(file.FullName, token);
-
-                    // LƯU Ý: Lưu nội dung vào Node
                     node.Content = content;
-
                     tokenCount = content.Length / 4;
                 }
                 catch (OperationCanceledException)
@@ -209,17 +227,19 @@ namespace NetIngest.Services
                 }
                 catch { }
             }
-            // Gán token cho node
             node.TokenCount = tokenCount;
-            // FileCount của node lá luôn là 1 (hoặc 0 nếu lỗi, nhưng cứ để 1 cho file hiện hữu)
             node.FileCount = 1;
 
             return tokenCount;
         }
 
-        // --- Các hàm Helper (ShouldIgnore, ShouldForceInclude, IsBinaryFile) GIỮ NGUYÊN ---
-        private bool ShouldIgnore(FileSystemInfo item, string rootPath, List<string> patterns)
+        // --- Helpers ---
+
+        private bool MatchesPatternList(FileSystemInfo item, string rootPath, List<string> patterns)
         {
+             if (patterns == null || patterns.Count == 0)
+                return false;
+
             string relativePath = Path.GetRelativePath(rootPath, item.FullName).Replace("\\", "/");
             string relativePathWithSlash = relativePath + (item is DirectoryInfo ? "/" : "");
 
@@ -228,39 +248,31 @@ namespace NetIngest.Services
                 string clean = pattern.Trim();
                 if (string.IsNullOrEmpty(clean))
                     continue;
-                if (
-                    string.Equals(item.Name, clean.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
-                )
+
+                // Name match
+                if (string.Equals(item.Name, clean.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
                     return true;
+                
+                // Glob match
                 if (Glob.IsMatch(relativePath, clean))
                     return true;
+
+                // Directory Glob match
                 if (item is DirectoryInfo && Glob.IsMatch(relativePathWithSlash, clean))
-                    return true;
-                if (
-                    !clean.Contains("/")
-                    && string.Equals(item.Name, clean, StringComparison.OrdinalIgnoreCase)
-                )
                     return true;
             }
             return false;
         }
 
+        private bool ShouldIgnore(FileSystemInfo item, string rootPath, List<string> patterns)
+        {
+            // Re-using MatchesPatternList logic but conceptually distinct
+            return MatchesPatternList(item, rootPath, patterns);
+        }
+
         private bool ShouldForceInclude(DirectoryInfo dir, string rootPath, List<string> patterns)
         {
-            if (patterns == null || patterns.Count == 0)
-                return false;
-            string relativePath = Path.GetRelativePath(rootPath, dir.FullName).Replace("\\", "/");
-            foreach (var pattern in patterns)
-            {
-                string clean = pattern.Trim();
-                if (string.IsNullOrEmpty(clean))
-                    continue;
-                if (string.Equals(dir.Name, clean, StringComparison.OrdinalIgnoreCase))
-                    return true;
-                if (Glob.IsMatch(relativePath, clean))
-                    return true;
-            }
-            return false;
+            return MatchesPatternList(dir, rootPath, patterns);
         }
 
         private bool IsBinaryFile(string filePath)

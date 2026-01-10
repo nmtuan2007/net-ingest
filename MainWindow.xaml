@@ -1,482 +1,497 @@
 ﻿<Window
-  x:Class="NetIngest.MainWindow"
-  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-  xmlns:vm="clr-namespace:NetIngest.ViewModels"
-  xmlns:models="clr-namespace:NetIngest.Models"
-  xmlns:core="clr-namespace:NetIngest.Core"
-  mc:Ignorable="d"
-  Title="NetIngest v1.0.0"
-  Height="800"
-  Width="1280"
-  WindowState="Maximized"
-  WindowStartupLocation="CenterScreen"
-  Background="#F8FAFC"
->
-  <Window.DataContext>
-    <vm:MainViewModel />
-  </Window.DataContext>
+    x:Class="NetIngest.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:core="clr-namespace:NetIngest.Core"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="clr-namespace:NetIngest.Models"
+    xmlns:vm="clr-namespace:NetIngest.ViewModels"
+    Title="NetIngest v1.0.0"
+    Width="1280"
+    Height="800"
+    AllowDrop="True"
+    Background="#F8FAFC"
+    Drop="Window_Drop"
+    WindowStartupLocation="CenterScreen"
+    WindowState="Maximized"
+    mc:Ignorable="d">
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
 
-  <Window.Resources>
-    <core:StringMatchToBooleanConverter x:Key="StringMatchConverter" />
-    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <Window.Resources>
+        <core:StringMatchToBooleanConverter x:Key="StringMatchConverter" />
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-    <Style TargetType="Button">
-      <Setter Property="Padding" Value="12,8" />
-      <Setter Property="Background" Value="#3B82F6" />
-      <Setter Property="Foreground" Value="White" />
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border
-              Background="{TemplateBinding Background}"
-              CornerRadius="6"
-              Padding="{TemplateBinding Padding}"
-            >
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Opacity" Value="0.9" />
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="#94A3B8" />
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Background" Value="#3B82F6" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border
+                            Padding="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="0.9" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#94A3B8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-    <HierarchicalDataTemplate
-      x:Key="FileTreeTemplate"
-      DataType="{x:Type models:FileTreeNode}"
-      ItemsSource="{Binding Children}"
-    >
-      <StackPanel
-        Orientation="Horizontal"
-        Margin="0,2"
-        Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
-      >
-        <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" Margin="0,0,6,0" />
-
-        <TextBlock Text="{Binding Icon}" Margin="0,0,5,0" FontSize="14" />
-        <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" />
-        <TextBlock
-          Text="{Binding TokenDisplay}"
-          FontSize="11"
-          Opacity="0.6"
-          Margin="8,0,0,0"
-          FontStyle="Italic"
-        />
-
-        <StackPanel.ContextMenu>
-          <ContextMenu>
-            <MenuItem
-              Header="Add to Ignore Patterns"
-              Command="{Binding PlacementTarget.Tag.AddIgnoreCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-              CommandParameter="{Binding RelativePath}"
-            >
-              <MenuItem.Icon>
-                <TextBlock Text="🚫" />
-              </MenuItem.Icon>
-            </MenuItem>
-
-            <MenuItem
-              Header="Add to Force Include (Whitelist)"
-              Command="{Binding PlacementTarget.Tag.AddWhitelistCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-              CommandParameter="{Binding Name}"
-            >
-              <MenuItem.Icon>
-                <TextBlock Text="✅" />
-              </MenuItem.Icon>
-            </MenuItem>
-
-            <MenuItem
-              Header="Copy Relative Path"
-              Command="{Binding PlacementTarget.Tag.CopyPathCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-              CommandParameter="{Binding RelativePath}"
-            >
-              <MenuItem.Icon>
-                <TextBlock Text="📋" />
-              </MenuItem.Icon>
-            </MenuItem>
-          </ContextMenu>
-        </StackPanel.ContextMenu>
-      </StackPanel>
-    </HierarchicalDataTemplate>
-  </Window.Resources>
-
-  <Grid>
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="380" />
-      <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
-
-    <!-- SIDEBAR -->
-    <Border Grid.Column="0" Background="White" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
-      <Grid Margin="20">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <!-- Header -->
-        <StackPanel Grid.Row="0">
-          <TextBlock Text="NetIngest" FontSize="26" FontWeight="Black" Foreground="#0F172A" />
-          <TextBlock
-            Text="Local Codebase Analyzer"
-            FontSize="13"
-            Foreground="#64748B"
-            Margin="0,0,0,15"
-          />
-          <Separator Background="#E2E8F0" Margin="0,0,0,10" />
-        </StackPanel>
-
-        <!-- Tabs -->
-        <TabControl Grid.Row="1" BorderThickness="0" Background="White" Margin="-5,0,0,0">
-          <TabItem Header="General">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="5,0,10,0">
-              <StackPanel>
-                <TextBlock
-                  Text="SOURCE DIRECTORY"
-                  FontWeight="Bold"
-                  Foreground="#64748B"
-                  Margin="0,15,0,5"
-                />
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <TextBox
-                    Grid.Column="0"
-                    Padding="8"
-                    BorderBrush="#CBD5E1"
-                    IsReadOnly="True"
-                    Text="{Binding SourcePath}"
-                  />
-                  <Button
-                    Grid.Column="1"
-                    Content="..."
-                    Width="35"
-                    Margin="5,0,0,0"
-                    Background="#475569"
-                    Command="{Binding BrowseCommand}"
-                  />
-                </Grid>
-
-                <TextBlock Margin="0,15,0,5" FontWeight="Bold" Foreground="#64748B">
-                  <Run Text="MAX FILE SIZE: " />
-                  <Run Text="{Binding SizeLabel, Mode=OneWay}" Foreground="#2563EB" />
-                </TextBlock>
-                <Slider
-                  Minimum="1"
-                  Maximum="2000"
-                  Value="{Binding MaxSizeKb}"
-                  TickFrequency="10"
-                  IsSnapToTickEnabled="True"
-                />
-
-                <TextBlock
-                  Text="SAMPLING"
-                  FontWeight="Bold"
-                  Foreground="#64748B"
-                  Margin="0,15,0,5"
-                />
+        <HierarchicalDataTemplate
+            x:Key="FileTreeTemplate"
+            DataType="{x:Type models:FileTreeNode}"
+            ItemsSource="{Binding Children}">
+            <StackPanel
+                Margin="0,2"
+                Orientation="Horizontal"
+                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <CheckBox
-                  Content="Limit files per directory"
-                  IsChecked="{Binding LimitFiles}"
-                  Margin="0,0,0,5"
-                />
-                <StackPanel Orientation="Horizontal" IsEnabled="{Binding LimitFiles}">
-                  <TextBlock Text="Take top:" VerticalAlignment="Center" Margin="0,0,5,0" />
-                  <TextBox
-                    Text="{Binding MaxFilesStr}"
-                    Width="40"
-                    Padding="3"
-                    HorizontalContentAlignment="Center"
-                  />
-                  <TextBlock Text="files only" VerticalAlignment="Center" Margin="5,0,0,0" />
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding IsChecked}" />
+
+                <TextBlock
+                    Margin="0,0,5,0"
+                    FontSize="14"
+                    Text="{Binding Icon}" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    Text="{Binding Name}" />
+                <TextBlock
+                    Margin="8,0,0,0"
+                    FontSize="11"
+                    FontStyle="Italic"
+                    Opacity="0.6"
+                    Text="{Binding TokenDisplay}" />
+
+                <StackPanel.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem
+                            Command="{Binding PlacementTarget.Tag.AddIgnoreCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="{Binding RelativePath}"
+                            Header="Add to Ignore Patterns">
+                            <MenuItem.Icon>
+                                <TextBlock Text="🚫" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <MenuItem
+                            Command="{Binding PlacementTarget.Tag.AddWhitelistCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="{Binding Name}"
+                            Header="Add to Force Include (Whitelist)">
+                            <MenuItem.Icon>
+                                <TextBlock Text="✅" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <MenuItem
+                            Command="{Binding PlacementTarget.Tag.CopyPathCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="{Binding RelativePath}"
+                            Header="Copy Relative Path">
+                            <MenuItem.Icon>
+                                <TextBlock Text="📋" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </ContextMenu>
+                </StackPanel.ContextMenu>
+            </StackPanel>
+        </HierarchicalDataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!--  SIDEBAR  -->
+        <Border
+            Grid.Column="0"
+            Background="White"
+            BorderBrush="#E2E8F0"
+            BorderThickness="0,0,1,0">
+            <Grid Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!--  Header  -->
+                <StackPanel Grid.Row="0">
+                    <TextBlock
+                        FontSize="26"
+                        FontWeight="Black"
+                        Foreground="#0F172A"
+                        Text="NetIngest" />
+                    <TextBlock
+                        Margin="0,0,0,15"
+                        FontSize="13"
+                        Foreground="#64748B"
+                        Text="Local Codebase Analyzer" />
+                    <Separator Margin="0,0,0,10" Background="#E2E8F0" />
                 </StackPanel>
 
-                <TextBlock
-                  Text="Force full ingest (Whitelist):"
-                  FontSize="11"
-                  Foreground="#94A3B8"
-                  Margin="0,8,0,4"
-                />
-                <TextBox
-                  Height="40"
-                  TextWrapping="Wrap"
-                  Padding="5"
-                  BorderBrush="#CBD5E1"
-                  Text="{Binding Whitelist, UpdateSourceTrigger=PropertyChanged}"
-                />
+                <!--  Tabs  -->
+                <TabControl
+                    Grid.Row="1"
+                    Margin="-5,0,0,0"
+                    Background="White"
+                    BorderThickness="0">
+                    <TabItem Header="General">
+                        <ScrollViewer Padding="5,0,10,0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock
+                                    Margin="0,15,0,5"
+                                    FontWeight="Bold"
+                                    Foreground="#64748B"
+                                    Text="SOURCE DIRECTORY" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox
+                                        Grid.Column="0"
+                                        Padding="8"
+                                        BorderBrush="#CBD5E1"
+                                        IsReadOnly="True"
+                                        Text="{Binding SourcePath}" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Width="35"
+                                        Margin="5,0,0,0"
+                                        Background="#475569"
+                                        Command="{Binding BrowseCommand}"
+                                        Content="..." />
+                                </Grid>
 
-                <TextBlock
-                  Text="IGNORE PATTERNS"
-                  FontWeight="Bold"
-                  Foreground="#64748B"
-                  Margin="0,15,0,5"
-                />
-                <CheckBox
-                  Content="Respect .gitignore"
-                  IsChecked="{Binding IncludeGitIgnored}"
-                  Margin="0,0,0,8"
-                  Foreground="#475569"
-                />
-                <TextBox
-                  Height="60"
-                  TextWrapping="Wrap"
-                  AcceptsReturn="True"
-                  Padding="5"
-                  BorderBrush="#CBD5E1"
-                  Text="{Binding IgnorePatterns, UpdateSourceTrigger=PropertyChanged}"
-                />
-              </StackPanel>
-            </ScrollViewer>
-          </TabItem>
+                                <TextBlock
+                                    Margin="0,15,0,5"
+                                    FontWeight="Bold"
+                                    Foreground="#64748B">
+                                    <Run Text="MAX FILE SIZE: " />
+                                    <Run Foreground="#2563EB" Text="{Binding SizeLabel, Mode=OneWay}" />
+                                </TextBlock>
+                                <Slider
+                                    IsSnapToTickEnabled="True"
+                                    Maximum="2000"
+                                    Minimum="1"
+                                    TickFrequency="10"
+                                    Value="{Binding MaxSizeKb}" />
 
-          <TabItem Header="Templates">
-            <StackPanel Margin="5">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ComboBox
-                  Grid.Column="0"
-                  ItemsSource="{Binding Templates}"
-                  SelectedItem="{Binding SelectedTemplate}"
-                  DisplayMemberPath="Name"
-                  Height="30"
-                />
-                <Button
-                  Grid.Column="1"
-                  Content="New"
-                  Width="50"
-                  Margin="5,0,0,0"
-                  Background="#10B981"
-                  Command="{Binding NewTemplateCommand}"
-                />
-              </Grid>
-              <TextBlock Text="Name:" Margin="0,10,0,0" />
-              <TextBox Text="{Binding EditingTemplateName}" Padding="5" />
-              <TextBlock Text="Content:" Margin="0,5,0,0" />
-              <TextBox
-                Text="{Binding EditingTemplateContent}"
-                Height="200"
-                TextWrapping="Wrap"
-                AcceptsReturn="True"
-                FontFamily="Consolas"
-                VerticalScrollBarVisibility="Auto"
-              />
-              <Button
-                Content="Save Template"
-                Margin="0,10,0,0"
-                Command="{Binding SaveTemplateCommand}"
-              />
-            </StackPanel>
-          </TabItem>
-        </TabControl>
+                                <TextBlock
+                                    Margin="0,15,0,5"
+                                    FontWeight="Bold"
+                                    Foreground="#64748B"
+                                    Text="SAMPLING" />
+                                <CheckBox
+                                    Margin="0,0,0,5"
+                                    Content="Limit files per directory"
+                                    IsChecked="{Binding LimitFiles}" />
+                                <StackPanel IsEnabled="{Binding LimitFiles}" Orientation="Horizontal">
+                                    <TextBlock
+                                        Margin="0,0,5,0"
+                                        VerticalAlignment="Center"
+                                        Text="Take top:" />
+                                    <TextBox
+                                        Width="40"
+                                        Padding="3"
+                                        HorizontalContentAlignment="Center"
+                                        Text="{Binding MaxFilesStr}" />
+                                    <TextBlock
+                                        Margin="5,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Text="files only" />
+                                </StackPanel>
 
-        <!-- Footer -->
-        <StackPanel Grid.Row="2" Margin="0,10,0,0">
-          <Border
-            Background="#F0F9FF"
-            BorderBrush="#BAE6FD"
-            BorderThickness="1"
-            CornerRadius="8"
-            Padding="15"
-            Margin="0,0,0,15"
-          >
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <StackPanel Grid.Column="0">
-                <TextBlock
-                  Text="{Binding TokenCountDisplay}"
-                  FontSize="20"
-                  FontWeight="Bold"
-                  Foreground="#0369A1"
-                />
-                <TextBlock Text="Tokens" FontSize="11" Foreground="#0EA5E9" />
-              </StackPanel>
-              <StackPanel Grid.Column="1">
-                <TextBlock
-                  Text="{Binding FileCountDisplay}"
-                  FontSize="20"
-                  FontWeight="Bold"
-                  Foreground="#0369A1"
-                />
-                <TextBlock Text="Files" FontSize="11" Foreground="#0EA5E9" />
-              </StackPanel>
+                                <TextBlock
+                                    Margin="0,15,0,5"
+                                    FontWeight="Bold"
+                                    Foreground="#64748B"
+                                    Text="TARGET FILES (Priority)" />
+                                <CheckBox
+                                    Margin="0,0,0,5"
+                                    Content="Focus on specific files only"
+                                    IsChecked="{Binding UseTargetFiles}" />
+                                <TextBox
+                                    Height="40"
+                                    Padding="5"
+                                    BorderBrush="#CBD5E1"
+                                    IsEnabled="{Binding UseTargetFiles}"
+                                    Text="{Binding TargetFilePatterns, UpdateSourceTrigger=PropertyChanged}"
+                                    TextWrapping="Wrap" />
+
+                                <TextBlock
+                                    Margin="0,8,0,4"
+                                    FontSize="11"
+                                    Foreground="#94A3B8"
+                                    Text="Force full ingest (Whitelist):" />
+                                <TextBox
+                                    Height="40"
+                                    Padding="5"
+                                    BorderBrush="#CBD5E1"
+                                    Text="{Binding Whitelist, UpdateSourceTrigger=PropertyChanged}"
+                                    TextWrapping="Wrap" />
+
+                                <TextBlock
+                                    Margin="0,15,0,5"
+                                    FontWeight="Bold"
+                                    Foreground="#64748B"
+                                    Text="IGNORE PATTERNS" />
+                                <CheckBox
+                                    Margin="0,0,0,8"
+                                    Content="Respect .gitignore"
+                                    Foreground="#475569"
+                                    IsChecked="{Binding IncludeGitIgnored}" />
+                                <TextBox
+                                    Height="60"
+                                    Padding="5"
+                                    AcceptsReturn="True"
+                                    BorderBrush="#CBD5E1"
+                                    Text="{Binding IgnorePatterns, UpdateSourceTrigger=PropertyChanged}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Templates">
+                        <StackPanel Margin="5">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox
+                                    Grid.Column="0"
+                                    Height="30"
+                                    DisplayMemberPath="Name"
+                                    ItemsSource="{Binding Templates}"
+                                    SelectedItem="{Binding SelectedTemplate}" />
+                                <Button
+                                    Grid.Column="1"
+                                    Width="50"
+                                    Margin="5,0,0,0"
+                                    Background="#10B981"
+                                    Command="{Binding NewTemplateCommand}"
+                                    Content="New" />
+                            </Grid>
+                            <TextBlock Margin="0,10,0,0" Text="Name:" />
+                            <TextBox Padding="5" Text="{Binding EditingTemplateName}" />
+                            <TextBlock Margin="0,5,0,0" Text="Content:" />
+                            <TextBox
+                                Height="200"
+                                AcceptsReturn="True"
+                                FontFamily="Consolas"
+                                Text="{Binding EditingTemplateContent}"
+                                TextWrapping="Wrap"
+                                VerticalScrollBarVisibility="Auto" />
+                            <Button
+                                Margin="0,10,0,0"
+                                Command="{Binding SaveTemplateCommand}"
+                                Content="Save Template" />
+                        </StackPanel>
+                    </TabItem>
+                </TabControl>
+
+                <!--  Footer  -->
+                <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                    <Border
+                        Margin="0,0,0,15"
+                        Padding="15"
+                        Background="#F0F9FF"
+                        BorderBrush="#BAE6FD"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock
+                                    FontSize="20"
+                                    FontWeight="Bold"
+                                    Foreground="#0369A1"
+                                    Text="{Binding TokenCountDisplay}" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="#0EA5E9"
+                                    Text="Tokens" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock
+                                    FontSize="20"
+                                    FontWeight="Bold"
+                                    Foreground="#0369A1"
+                                    Text="{Binding FileCountDisplay}" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="#0EA5E9"
+                                    Text="Files" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Button
+                        Height="50"
+                        Background="{Binding AnalyzeButtonColor}"
+                        Command="{Binding AnalyzeCommand}"
+                        Content="{Binding AnalyzeButtonText}"
+                        FontSize="15"
+                        FontWeight="Bold" />
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        HorizontalAlignment="Center"
+                        FontSize="12"
+                        Foreground="#64748B"
+                        Text="{Binding StatusMsg}"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
             </Grid>
-          </Border>
+        </Border>
 
-          <Button
-            Content="{Binding AnalyzeButtonText}"
-            Background="{Binding AnalyzeButtonColor}"
-            Height="50"
-            FontSize="15"
-            FontWeight="Bold"
-            Command="{Binding AnalyzeCommand}"
-          />
-          <TextBlock
-            Text="{Binding StatusMsg}"
-            Margin="0,8,0,0"
-            FontSize="12"
-            Foreground="#64748B"
-            HorizontalAlignment="Center"
-            TextTrimming="CharacterEllipsis"
-          />
-        </StackPanel>
-      </Grid>
-    </Border>
+        <!--  MAIN CONTENT  -->
+        <Grid Grid.Column="1" Margin="25">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-    <!-- MAIN CONTENT -->
-    <Grid Grid.Column="1" Margin="25">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
+            <!--  Tabs View  -->
+            <Border
+                Grid.Row="0"
+                Margin="0,0,0,15"
+                BorderBrush="#E2E8F0"
+                BorderThickness="0,0,0,1">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton
+                        Width="100"
+                        Content="Summary"
+                        GroupName="ViewTabs"
+                        IsChecked="{Binding ViewMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Summary}"
+                        Style="{StaticResource {x:Type ToggleButton}}" />
 
-      <!-- Tabs View -->
-      <Border Grid.Row="0" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Margin="0,0,0,15">
-        <StackPanel Orientation="Horizontal">
-          <RadioButton
-            Content="Summary"
-            IsChecked="{Binding ViewMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Summary}"
-            GroupName="ViewTabs"
-            Width="100"
-            Style="{StaticResource {x:Type ToggleButton}}"
-          />
+                    <RadioButton
+                        Width="100"
+                        Margin="10,0"
+                        Content="Tree View"
+                        GroupName="ViewTabs"
+                        IsChecked="{Binding ViewMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Tree}"
+                        Style="{StaticResource {x:Type ToggleButton}}" />
 
-          <RadioButton
-            Content="Tree View"
-            IsChecked="{Binding ViewMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Tree}"
-            GroupName="ViewTabs"
-            Width="100"
-            Margin="10,0"
-            Style="{StaticResource {x:Type ToggleButton}}"
-          />
+                    <RadioButton
+                        Width="100"
+                        Content="Full Content"
+                        GroupName="ViewTabs"
+                        IsChecked="{Binding ViewMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Content}"
+                        Style="{StaticResource {x:Type ToggleButton}}" />
+                </StackPanel>
+            </Border>
 
-          <RadioButton
-            Content="Full Content"
-            IsChecked="{Binding ViewMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Content}"
-            GroupName="ViewTabs"
-            Width="100"
-            Style="{StaticResource {x:Type ToggleButton}}"
-          />
-        </StackPanel>
-      </Border>
+            <!--  Content Area  -->
+            <Grid Grid.Row="1">
+                <!--  1. TEXTBOX  -->
+                <TextBox
+                    AcceptsReturn="True"
+                    FontFamily="Consolas"
+                    FontSize="13"
+                    HorizontalScrollBarVisibility="Auto"
+                    IsReadOnly="True"
+                    Padding="15"
+                    Text="{Binding ResultText}"
+                    VerticalScrollBarVisibility="Auto">
+                    <TextBox.Style>
+                        <Style TargetType="TextBox">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ViewMode}" Value="Tree">
+                                    <Setter Property="Visibility" Value="Hidden" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBox.Style>
+                </TextBox>
 
-      <!-- Content Area -->
-      <Grid Grid.Row="1">
-        <!-- 1. TEXTBOX -->
-        <TextBox
-          Text="{Binding ResultText}"
-          FontFamily="Consolas"
-          FontSize="13"
-          AcceptsReturn="True"
-          IsReadOnly="True"
-          VerticalScrollBarVisibility="Auto"
-          HorizontalScrollBarVisibility="Auto"
-          Padding="15"
-        >
-          <TextBox.Style>
-            <Style TargetType="TextBox">
-              <Setter Property="Visibility" Value="Visible" />
-              <Style.Triggers>
-                <DataTrigger Binding="{Binding ViewMode}" Value="Tree">
-                  <Setter Property="Visibility" Value="Hidden" />
-                </DataTrigger>
-              </Style.Triggers>
-            </Style>
-          </TextBox.Style>
-        </TextBox>
+                <!--  2. TREEVIEW  -->
+                <TreeView
+                    BorderBrush="#E2E8F0"
+                    BorderThickness="1"
+                    ItemTemplate="{StaticResource FileTreeTemplate}"
+                    ItemsSource="{Binding TreeRoots}"
+                    Padding="10">
+                    <TreeView.Style>
+                        <Style TargetType="TreeView">
+                            <Setter Property="Visibility" Value="Hidden" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ViewMode}" Value="Tree">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TreeView.Style>
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem">
+                            <Setter Property="IsExpanded" Value="True" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                </TreeView>
 
-        <!-- 2. TREEVIEW -->
-        <TreeView
-          ItemsSource="{Binding TreeRoots}"
-          ItemTemplate="{StaticResource FileTreeTemplate}"
-          BorderBrush="#E2E8F0"
-          BorderThickness="1"
-          Padding="10"
-        >
-          <TreeView.Style>
-            <Style TargetType="TreeView">
-              <Setter Property="Visibility" Value="Hidden" />
-              <Style.Triggers>
-                <DataTrigger Binding="{Binding ViewMode}" Value="Tree">
-                  <Setter Property="Visibility" Value="Visible" />
-                </DataTrigger>
-              </Style.Triggers>
-            </Style>
-          </TreeView.Style>
-          <TreeView.ItemContainerStyle>
-            <Style TargetType="TreeViewItem">
-              <Setter Property="IsExpanded" Value="True" />
-            </Style>
-          </TreeView.ItemContainerStyle>
-        </TreeView>
+                <!--  Loading Overlay  -->
+                <Grid Background="#88FFFFFF" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            FontSize="20"
+                            FontWeight="Bold"
+                            Foreground="#3B82F6"
+                            Text="Processing..." />
+                        <TextBlock
+                            Margin="0,5,0,0"
+                            HorizontalAlignment="Center"
+                            FontSize="12"
+                            Foreground="#64748B"
+                            Text="(Click STOP to cancel)" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
 
-        <!-- Loading Overlay -->
-        <Grid
-          Background="#88FFFFFF"
-          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
-        >
-          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <TextBlock
-              Text="Processing..."
-              HorizontalAlignment="Center"
-              FontSize="20"
-              FontWeight="Bold"
-              Foreground="#3B82F6"
-            />
-            <TextBlock
-              Text="(Click STOP to cancel)"
-              HorizontalAlignment="Center"
-              FontSize="12"
-              Foreground="#64748B"
-              Margin="0,5,0,0"
-            />
-          </StackPanel>
+            <!--  Actions  -->
+            <StackPanel
+                Grid.Row="2"
+                Margin="0,15,0,0"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal">
+                <Button
+                    Margin="0,0,10,0"
+                    Background="{Binding CopyViewBtnColor}"
+                    Command="{Binding CopyViewCommand}"
+                    Content="{Binding CopyViewBtnText}" />
+                <Button
+                    Background="{Binding CopyTplBtnColor}"
+                    Command="{Binding CopyTemplateCommand}"
+                    Content="{Binding CopyTplBtnText}" />
+                <Button
+                    Margin="10,0,0,0"
+                    Background="#7C3AED"
+                    Command="{Binding SaveCommand}"
+                    Content="Save..." />
+            </StackPanel>
         </Grid>
-      </Grid>
-
-      <!-- Actions -->
-      <StackPanel
-        Grid.Row="2"
-        Orientation="Horizontal"
-        HorizontalAlignment="Right"
-        Margin="0,15,0,0"
-      >
-        <Button
-          Content="{Binding CopyViewBtnText}"
-          Background="{Binding CopyViewBtnColor}"
-          Margin="0,0,10,0"
-          Command="{Binding CopyViewCommand}"
-        />
-        <Button
-          Content="{Binding CopyTplBtnText}"
-          Background="{Binding CopyTplBtnColor}"
-          Command="{Binding CopyTemplateCommand}"
-        />
-        <Button
-          Content="Save..."
-          Margin="10,0,0,0"
-          Background="#7C3AED"
-          Command="{Binding SaveCommand}"
-        />
-      </StackPanel>
     </Grid>
-  </Grid>
 </Window>

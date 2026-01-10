@@ -54,6 +54,22 @@ namespace NetIngest.ViewModels
             get => _maxFilesStr;
             set => SetProperty(ref _maxFilesStr, value);
         }
+        
+        // --- NEW: Target Files Feature ---
+        private bool _useTargetFiles;
+        public bool UseTargetFiles
+        {
+            get => _useTargetFiles;
+            set => SetProperty(ref _useTargetFiles, value);
+        }
+
+        private string _targetFilePatterns = "Program.cs, Startup.cs, *.config";
+        public string TargetFilePatterns
+        {
+            get => _targetFilePatterns;
+            set => SetProperty(ref _targetFilePatterns, value);
+        }
+        // ---------------------------------
 
         private string _whitelist = "Models, DTOs";
         public string Whitelist
@@ -280,6 +296,8 @@ namespace NetIngest.ViewModels
             Whitelist = settings.Whitelist;
             IgnorePatterns = settings.IgnorePatterns;
             IncludeGitIgnored = settings.IncludeGitIgnored;
+            UseTargetFiles = settings.UseTargetFiles;
+            TargetFilePatterns = settings.TargetFilePatterns;
         }
 
         private void SaveSettings()
@@ -293,6 +311,8 @@ namespace NetIngest.ViewModels
                 Whitelist = Whitelist,
                 IgnorePatterns = IgnorePatterns,
                 IncludeGitIgnored = IncludeGitIgnored,
+                UseTargetFiles = UseTargetFiles,
+                TargetFilePatterns = TargetFilePatterns
             };
             _settingsService.SaveSettings(settings);
         }
@@ -346,6 +366,12 @@ namespace NetIngest.ViewModels
 
                 AddPatternsToList(options.IgnorePatterns, IgnorePatterns);
                 AddPatternsToList(options.ForceFullIngestPatterns, Whitelist);
+                
+                // Add Target Patterns if enabled
+                if (UseTargetFiles)
+                {
+                    AddPatternsToList(options.TargetFilePatterns, TargetFilePatterns);
+                }
 
                 var progress = new Progress<string>(msg => StatusMsg = msg);
 
@@ -384,38 +410,49 @@ namespace NetIngest.ViewModels
             int totalFiles = 0;
             long totalTokens = 0;
 
-            void ProcessNodes(IEnumerable<FileTreeNode> nodes, string indent)
+            bool ProcessNode(FileTreeNode node, string indent, StringBuilder parentTreeBuilder)
             {
-                var nodeList = nodes.ToList();
-                for (int i = 0; i < nodeList.Count; i++)
+                if (node.IsDirectory)
                 {
-                    var node = nodeList[i];
-                    if (!node.IsChecked)
-                        continue;
+                    var childTreeBuilder = new StringBuilder();
+                    bool hasSelectedDescendants = false;
 
-                    sbTree.AppendLine($"{indent}├── {node.Name}");
-
-                    if (node.IsDirectory)
+                    foreach (var child in node.Children)
                     {
-                        ProcessNodes(node.Children, indent + "│   ");
+                        bool childHasSelection = ProcessNode(child, indent + "│   ", childTreeBuilder);
+                        if (childHasSelection)
+                        {
+                            hasSelectedDescendants = true;
+                        }
                     }
-                    else
+
+                    if (hasSelectedDescendants)
+                    {
+                        parentTreeBuilder.AppendLine($"{indent}├── {node.Name}");
+                        parentTreeBuilder.Append(childTreeBuilder);
+                        return true;
+                    }
+                    return false;
+                }
+                else
+                {
+                    if (node.IsChecked)
                     {
                         totalFiles++;
                         totalTokens += node.TokenCount;
+                        parentTreeBuilder.AppendLine($"{indent}├── {node.Name}");
+
                         if (!string.IsNullOrEmpty(node.Content))
                         {
-                            sbContent.AppendLine(
-                                "================================================"
-                            );
+                            sbContent.AppendLine("================================================");
                             sbContent.AppendLine($"FILE: {node.RelativePath}");
-                            sbContent.AppendLine(
-                                "================================================"
-                            );
+                            sbContent.AppendLine("================================================");
                             sbContent.AppendLine(node.Content);
                             sbContent.AppendLine();
                         }
+                        return true;
                     }
+                    return false;
                 }
             }
 
@@ -423,7 +460,7 @@ namespace NetIngest.ViewModels
             {
                 var root = TreeRoots[0];
                 sbTree.AppendLine($"└── {root.Name}");
-                ProcessNodes(root.Children, "    ");
+                ProcessNode(root, "    ", sbTree);
             }
 
             _lastResult.FileCount = totalFiles;

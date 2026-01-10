@@ -1,9 +1,11 @@
 {
-  "LastSourcePath": "C:\\Working\\SourceCode\\VNPT.CameraAi.PhuongXa\\Source\\VNPT.CameraAi.PhuongXa.API\\VNPT.CameraAi.PhuongXa.Api",
+  "LastSourcePath": "C:\\Working\\SourceCode\\Github\\nmtuan200793\\GradeFlow",
   "MaxFileSizeKb": 100,
   "LimitFiles": true,
   "MaxFilesStr": "3",
   "Whitelist": "Models, DTOs",
-  "IgnorePatterns": "docs/, *.svg, test/, Temp",
-  "IncludeGitIgnored": true
+  "IgnorePatterns": "docs/, *.svg, test/, Temp, windows, linux, .dart_tool, ios",
+  "IncludeGitIgnored": true,
+  "UseTargetFiles": true,
+  "TargetFilePatterns": "auth_provider.dart, user_entity.dart"
 }

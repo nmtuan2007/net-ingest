@@ -11,5 +11,9 @@ namespace NetIngest.Models
         public string Whitelist { get; set; } = "Models, DTOs";
         public string IgnorePatterns { get; set; } = "docs/, *.svg, test/";
         public bool IncludeGitIgnored { get; set; } = true;
+
+        // --- NEW: Target Files Feature ---
+        public bool UseTargetFiles { get; set; } = false;
+        public string TargetFilePatterns { get; set; } = "Program.cs, Startup.cs, *.config";
     }
 }
