@@ -20,8 +20,8 @@
     <AssemblyName>NetIngest</AssemblyName>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <!-- add your .ico file to project root if you have one -->
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
     <Description>A blazing-fast WPF tool that scans your codebase, applies smart filters, and packs everything into one clean, AI-ready text block — perfect for ChatGPT, Claude, Grok, or any LLM</Description>
   </PropertyGroup>
 

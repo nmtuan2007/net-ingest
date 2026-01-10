@@ -7,7 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="clr-namespace:NetIngest.Models"
     xmlns:vm="clr-namespace:NetIngest.ViewModels"
-    Title="NetIngest v1.0.0"
+    Title="NetIngest v1.1.0"
     Width="1280"
     Height="800"
     AllowDrop="True"
